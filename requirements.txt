@@ -1,0 +1,2 @@
+configparser==3.5.0
+mysql-connector-python-rf==2.2.2
