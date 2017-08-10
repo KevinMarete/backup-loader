@@ -113,7 +113,15 @@ def logimportedfile(cfg, filename, mflcode, adt_version):
 	try:
 		cnx = getdbconnection(cfg, cfg['main']['db_name'])
 		cursor = cnx.cursor()
-		cursor.execute("INSERT INTO tbl_backup(filename, mflcode, adt_version) VALUES (%s, %s, %s)", (filename, mflcode, adt_version))
+		#Get facility_id
+		cursor.execute("SELECT id FROM tbl_facility WHERE mflcode = %s", (mflcode))
+		row = cursor.fetchone()
+		if row is not None:
+			row = cursor.fetchone()
+			facility_id = row[0]
+			cursor.execute("INSERT INTO tbl_backup(filename, foldername, adt_version, facility_id) VALUES (%s, %s, %s)", (filename, mflcode, adt_version, facility_id))
+		else:
+			print 'error: mflcode', mflcode, 'is missing!'
 	except Exception, e:
 		print 'error:',e
 	#Commit changes and close connection
