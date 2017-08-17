@@ -73,6 +73,8 @@ def extractbackup(backups):
 			#Log imported file
 			logimportedfile(cfg, filename, mflcode, adt_version)	
 			print 'success:',filename,'was imported in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
+			#Extract data
+			extractdata(cfg, db_name, mflcode)
 		else:
 			print 'error:',filename,' failed to be imported in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
 	return databases
@@ -89,7 +91,7 @@ def importsql(cfg, db_name, sqlfile):
 	cnx = getconnection(cfg)
 	cursor = cnx.cursor()
 	try:
-		cursor.execute("DROP DATABASE IF EXISTS "+db_name)
+		dropdatabase(cfg, db_name)
 		cursor.execute("CREATE DATABASE "+db_name)
 		import_command = "mysql -h "+cfg["database"]["hostname"]+" -P "+cfg["database"]["port"]+" -u "+cfg["database"]["username"]+" -p"+cfg["database"]["password"]+" "+db_name+" < "+sqlfile
 		os.system(import_command)
@@ -109,6 +111,11 @@ def getconnection(cfg):
 	}
 	return mysql.connector.connect(**dbcfg)
 
+def dropdatabase(cfg, db_name):
+	cnx = getconnection(cfg)
+	cursor = cnx.cursor()
+	cursor.execute("DROP DATABASE IF EXISTS "+db_name)
+
 def logimportedfile(cfg, filename, mflcode, adt_version):
 	try:
 		cnx = getdbconnection(cfg, cfg['main']['db_name'])
@@ -127,6 +134,74 @@ def logimportedfile(cfg, filename, mflcode, adt_version):
 	cnx.commit()
 	cursor.close()
 	cnx.close()
+
+def extractdata(cfg, source_db, mflcode):
+	start = time.time()
+	models = cfg['main']['data_models'].split(',')
+	source_cnx = getdbconnection(cfg, source_db)
+	source_cursor = source_cnx.cursor()
+	#Get queries from data_models
+	for model in models:
+		sqlfile = cfg['main']['models_dir']+model+'.sql'
+		proc_name = str(cfg['main']['proc_prefix']+model)
+		try:
+			query = getsql(sqlfile).format(mflcode)
+			source_cursor.execute(query)
+			#Save data using procs
+			for proc_args in source_cursor.fetchall():
+				runproc(cfg, sqlfile, model, proc_name, proc_args)
+		except Exception, e:
+			logfile = cfg['main']['logs_dir']+'failed_'+model+'.log'
+			message = "DATABASE: "+ source_db + " ERROR: "+ str(e)+" QUERY: "+query+";"
+			writelog(logfile, message)
+	#Close source connections
+	source_cursor.close()
+	source_cnx.close()
+	#Drop source_db
+	dropdatabase(cfg, source_db)
+	#Display message
+	print 'success:',source_db,'data was extracted in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
+
+def runproc(cfg, filename, model, proc_name, proc_args):
+	#Get database connection
+	target_db = cfg['main']['db_name']
+	target_cnx = getdbconnection(cfg, target_db)
+	target_cursor = target_cnx.cursor()
+	try:
+		result_args = target_cursor.callproc(proc_name, proc_args)
+		#Commit changes and close connection
+		target_cnx.commit()
+		target_cursor.close()
+		target_cnx.close()
+		return {'status': True, 'message': result_args[1]}
+	except Exception, e:
+		logfile = cfg['main']['logs_dir']+'failed_'+model+'.log'
+		message = "DATABASE: "+ target_db + " ERROR: "+ str(e)+" PROCEDURE: CALL "+proc_name+"("+','.join("'{0}'".format(x) for x in proc_args)+");"
+		writelog(logfile, message)
+		return {'status': False, 'message': e}
+
+def getsql(sqlfile):
+	file = open(sqlfile, 'r')
+	sql = " ".join(file.readlines())
+	return sql
+
+def writelog(logfile,logmsg):
+	import logging
+
+	logger = logging.getLogger(__name__)
+	logger.setLevel(logging.INFO)
+	#create a logfile handler
+	handler = logging.FileHandler(logfile)
+	handler.setLevel(logging.INFO)
+	#create a logging format
+	formatter = logging.Formatter('%(asctime)s %(message)s')
+	handler.setFormatter(formatter)
+	#add the handlers to the logger
+	logger.addHandler(handler)
+	#write message to logfile
+	logger.info(logmsg)
+	#remove handler
+	logger.removeHandler(handler)
 
 if __name__ == '__main__':
 	#Encode strings to utf-8
