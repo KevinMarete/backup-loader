@@ -59,33 +59,38 @@ def extractbackup(backups):
 		adt_version = filename.split('_')[2].replace('.sql.zip','')
 		#Unzip sqlfile
 		zipfile = os.path.join(files_dir, filename)
-		sqlfile = os.path.join(files_dir, getuncompressedfile(zipfile, files_dir, mflcode))
+		sqlfile = getuncompressedfile(zipfile, files_dir, mflcode)
 		#Remove zipfile
 		os.remove(zipfile)
 		#Import sqlfile
-		db_name = str(cfg['main']['db_prefix'])+mflcode
-		response = importsql(cfg, db_name, sqlfile)
-		#Remove sqlfile
-		os.remove(sqlfile)
-		#Show response
-		if(response['status']):
-			databases.append(db_name)
-			#Log imported file
-			logimportedfile(cfg, filename, mflcode, adt_version)	
-			print 'success:',filename,'was imported in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
-			#Extract data
-			extractdata(cfg, db_name, mflcode)
-		else:
-			print 'error:',filename,' failed to be imported in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
+		if(sqlfile != False):
+			sqlfile = os.path.join(files_dir, sqlfile)
+			db_name = str(cfg['main']['db_prefix'])+mflcode
+			response = importsql(cfg, db_name, sqlfile)
+			#Remove sqlfile
+			os.remove(sqlfile)
+			#Show response
+			if(response['status']):
+				databases.append(db_name)
+				#Log imported file
+				logimportedfile(cfg, filename, mflcode, adt_version)	
+				print 'success:',filename,'was imported in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
+				#Extract data
+				extractdata(cfg, db_name, mflcode)
+			else:
+				print 'error:',filename,' failed to be imported in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
 	return databases
 
 def getuncompressedfile(path_to_zip_file, directory_to_extract_to, mflcode):
 	import zipfile
-	archive = zipfile.ZipFile(path_to_zip_file)
-	for file in archive.namelist():
-	    if file.startswith(mflcode):
-	        archive.extract(file, directory_to_extract_to)
+	try:
+		archive = zipfile.ZipFile(path_to_zip_file)
+		for file in archive.namelist():
+			if file.startswith(mflcode):
+				archive.extract(file, directory_to_extract_to)
 		return file
+	except zipfile.BadZipfile:
+		return False
 
 def importsql(cfg, db_name, sqlfile):
 	cnx = getconnection(cfg)
