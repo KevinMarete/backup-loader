@@ -109,3 +109,63 @@ BEGIN
     END IF;
 END//
 DELIMITER ;
+
+/*Create Dashboard Tables from webADT data*/
+DELIMITER //
+CREATE OR REPLACE PROCEDURE proc_create_dsh_tables_adt()
+BEGIN
+    SET @@foreign_key_checks = 0;   
+    /*ADT Patients*/
+    TRUNCATE dsh_patient_adt;
+    SELECT 
+        c.name AS county,
+        cs.name AS sub_county,
+        f.name AS facility,
+        p.name AS partner,
+        CASE 
+            WHEN ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365) >= 15 THEN 'adult'
+            WHEN ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365) < 15 THEN 'child'
+            ELSE NULL
+        END AS age_category,
+        ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365, 1) AS age,
+        CASE 
+            WHEN ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365, 1) BETWEEN 0 AND 3 THEN '0-3'
+            WHEN ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365, 1) BETWEEN 3 AND 5 THEN '3-5'
+            WHEN ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365, 1) BETWEEN 5 AND 10 THEN '5-10'
+            WHEN ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365, 1) BETWEEN 10 AND 15 THEN '10-15'
+            WHEN ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365, 1) BETWEEN 15 AND 20 THEN '15-20'
+            WHEN ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365, 1) BETWEEN 20 AND 24 THEN '20-24'
+            WHEN ROUND(DATEDIFF(CURDATE(), pt.birth_date)/365, 1) > 24 THEN '>24'
+            ELSE NULL
+        END AS age_band,
+        pt.gender,
+        pt.current_weight,
+        CASE 
+            WHEN pt.current_weight BETWEEN 3 AND 5.9 THEN '3-5.9'
+            WHEN pt.current_weight BETWEEN 6 AND 9.9 THEN '6-9.9'
+            WHEN pt.current_weight BETWEEN 10 AND 13.9 THEN '10-13.9'
+            WHEN pt.current_weight BETWEEN 14 AND 19.9 THEN '14-19.9'
+            WHEN pt.current_weight BETWEEN 20 AND 24.9 THEN '20-24.9'
+            WHEN pt.current_weight BETWEEN 25 AND 34.9 THEN '25-34.9'
+            WHEN pt.current_weight > 35 THEN '>35'
+            ELSE NULL
+        END AS weight_band,
+        pt.start_regimen_date,
+        CONCAT_WS(' | ', sr.code, sr.name) AS start_regimen,
+        CONCAT_WS(' | ', cr.code, cr.name) AS current_regimen,
+        pt.enrollment_date,
+        s.name AS service,
+        st.name AS status
+    FROM tbl_patient_adt pt
+    INNER JOIN tbl_facility f ON pt.facility_id = f.id
+    INNER JOIN tbl_partner p ON f.partner_id = p.id
+    INNER JOIN tbl_subcounty cs ON cs.id = f.subcounty_id
+    INNER JOIN tbl_county c ON c.id = cs.county_id
+    LEFT JOIN tbl_regimen sr ON pt.start_regimen_id = sr.id
+    LEFT JOIN tbl_regimen cr ON pt.current_regimen_id = cr.id
+    LEFT JOIN tbl_service s ON s.id = pt.service_id
+    LEFT JOIN tbl_status st ON st.id = pt.status_id
+    WHERE st.name LIKE '%active%'
+    SET @@foreign_key_checks = 1;
+END//
+DELIMITER ;
