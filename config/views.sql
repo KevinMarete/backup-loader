@@ -21,7 +21,7 @@ CREATE OR REPLACE VIEW vw_install_list AS
 	INNER JOIN tbl_partner p ON p.id = f.partner_id
 	INNER JOIN tbl_user u ON u.id = i.user_id
 	LEFT JOIN tbl_backup b ON b.facility_id = f.id
-	GROUP BY i.facility_id
+	GROUP BY i.facility_id;
 
 /*Central Site List*/
 CREATE OR REPLACE VIEW vw_central_site_list AS
