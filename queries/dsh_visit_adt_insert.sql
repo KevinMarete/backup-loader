@@ -1,0 +1,3 @@
+    INSERT INTO dsh_visit_adt (current_height,current_weight,current_bsa,current_bmi,purpose,regimen_change_reason,dispensing_date,last_regimen,current_regimen,appointment_date,appointment_adherence,non_adherence_reason,drug,pack_size,dose,quantity,duration,pill_count_adherence,self_reporting_adherence,indication,patient_adt_id)
+    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    ON DUPLICATE KEY UPDATE patient_adt_id=%(patient_adt_id)s, dispensing_date=%(dispensing_date)s, drug=%(drug)s
