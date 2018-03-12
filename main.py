@@ -103,11 +103,6 @@ def extractbackup(backups):
 	databases = []
 	#Drop/Create database based on backup file
 	for mflcode in backups:
-
-		db_name = str(cfg['main']['db_prefix'])+mflcode
-		extractdata(cfg, db_name, mflcode)
-
-		"""
 		start = time.time()
 		filename = backups[mflcode]
 		adt_version = filename.split('_')[2].replace('.sql.zip','')
@@ -127,13 +122,19 @@ def extractbackup(backups):
 			if(response['status']):
 				databases.append(db_name)
 				#Log imported file
-				logimportedfile(cfg, filename, mflcode, adt_version)	
-				print 'Success:',filename,'was imported in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
-				#Extract data
-				extractdata(cfg, db_name, mflcode)
+				logstatus = logbackup(cfg, filename, mflcode, adt_version)
+				if(logstatus['status']):	
+					print 'Success:',filename,'was imported in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
+					#Extract data
+					extractdata(cfg, db_name, mflcode)
+				else:
+					print logstatus['message']
 			else:
 				print 'Error:',filename,' failed to be imported in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
-		"""
+			
+			#Drop source database
+			dropdatabase(cfg, db_name)
+
 	return databases
 
 def getuncompressedfile(path_to_zip_file, directory_to_extract_to, mflcode):
@@ -157,7 +158,6 @@ def importsql(cfg, db_name, sqlfile):
 		os.system(import_command)
 		return {'status': True, 'message': 'Database Imported Successful'}
 	except Exception, e:
-		print 'Error:',e
 		return {'status': False, 'message': e}
 	cursor.close()
 	cnx.close()
@@ -176,25 +176,32 @@ def dropdatabase(cfg, db_name):
 	cursor = cnx.cursor()
 	cursor.execute("DROP DATABASE IF EXISTS "+db_name)
 
-def logimportedfile(cfg, filename, mflcode, adt_version):
+def logbackup(cfg, filename, mflcode, adt_version):
+	logstatus = False
 	try:
 		cnx = getdbconnection(cfg, cfg['main']['db_name'])
 		cursor = cnx.cursor()
 		#Get facility_id
 		cursor.execute("SELECT id FROM tbl_facility WHERE mflcode = '"+mflcode+"'")
 		row = cursor.fetchone()
+		#Log backupfile
 		if row is not None:
 			facility_id = row[0]
 			cursor.execute("INSERT INTO tbl_backup(filename, foldername, adt_version, facility_id) VALUES (%s, %s, %s, %s)", (filename, mflcode, adt_version, facility_id))
+			cnx.commit()
+			logstatus = True
+			logmsg = 'Success: Backupfile '+ filename +' was logged!'
 		else:
-			print 'Error: mflcode', mflcode, 'is missing!'
+			logmsg = 'Error: mflcode '+ mflcode +' is missing!'
 	except Exception, e:
-		print 'Error:', e
-	#Commit changes and close connection
-	cnx.commit()
+		logmsg = 'Error: ' + e
+	
+	#Close connection
 	cursor.close()
 	cnx.close()
 
+	return {'status': logstatus, 'message': logmsg}
+	
 def extractdata(cfg, source_db, mflcode):
 	start = time.time()
 	source_tables = cfg['main']['source_tables'].split(',')
@@ -203,20 +210,27 @@ def extractdata(cfg, source_db, mflcode):
 	source_cursor = source_cnx.cursor()
 
 	#Fix for source tables
-	fixfile = cfg['main']['queries_dir']+'source_fix.sql'	
-	source_cursor.execute(getsql(fixfile), multi=True)
+	fixfile = cfg['main']['queries_dir']+'create_alter_source_tables.sql'	
+	for result in source_cursor.execute(getsql(fixfile).format(db_name=source_db), multi=True):
+		if result.with_rows:
+			"Rows produced by statement '{}':".format(result.statement)
+		else:
+			"Number of rows affected by statement '{}': {}".format(result.statement, result.rowcount)
 	source_cnx.commit()
+	print 'Success: Missing tables and columns added to database:',source_db
 
 	#Get queries from source_tables
 	for source_table in source_tables:
 		sql_counter = 0
-		sqlfile = cfg['main']['queries_dir']+source_table+'.sql'
+		sqlfile = cfg['main']['queries_dir']+'select_'+source_table+'_table.sql'
 		destination_table = str(cfg['destination'][source_table])
+		proc_name =  str(cfg['main']['proc_name'])+destination_table
 		#Get table_size
 		sql_count = "SELECT COUNT(*) total FROM " + source_table + " WHERE active = '1'"
 		source_cursor.execute(sql_count)
 		table_size = source_cursor.fetchone()[0]
 		#Use batch to get data
+		print 'Info: Migration of table',source_table,'containing rows',table_size,'has started!'
 		while sql_counter < table_size:
 			try:
 				query = getsql(sqlfile).format(sql_counter, batch_size)
@@ -228,15 +242,16 @@ def extractdata(cfg, source_db, mflcode):
 				sql_counter += batch_size
 			except Exception, e:
 				logfile = cfg['main']['logs_dir']+'failed_'+source_table+'.log'
-				message = "Database: "+ source_db + " Error: "+ str(e)+" Query: "+query+";"
+				message = "Database: "+ source_db + " Error: "+ str(e)
 				writelog(logfile, message)
+		#Run cleanup stored_procedure on destination table
+		runproc(cfg, proc_name)
+		print 'Success: Migration of table',source_table,'completed in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
 	#Close source connections
 	source_cursor.close()
 	source_cnx.close()
-	#Drop source_db
-	dropdatabase(cfg, source_db)
 	#Display message
-	print 'Success:',source_db,'data was extracted in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
+	print 'Success: Database',source_db,'data was extracted in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
 
 def savebatch(cfg, destination_table, source_data):
 	#Get database connection
@@ -244,17 +259,36 @@ def savebatch(cfg, destination_table, source_data):
 	target_cnx = getdbconnection(cfg, target_db)
 	target_cursor = target_cnx.cursor()
 	try:
-		target_cursor.executemany('"""'+getsql(cfg['main']['queries_dir']+destination_table+'_insert.sql')+'"""', source_data)
+		target_cursor.executemany(getsql(cfg['main']['queries_dir']+'insert_'+destination_table+'_table.sql'), source_data)
 		#Commit changes and close connection
 		target_cnx.commit()
 		target_cursor.close()
 		target_cnx.close()
 		return {'status': True, 'message': destination_table + ' batch saved!'}
 	except Exception, e:
-		logfile = cfg['main']['logs_dir']+'failed_'+source_table+'.log'
+		logfile = cfg['main']['logs_dir']+'failed_'+destination_table+'.log'
 		message = "Database: "+ target_db + " Error: "+ str(e)+";"
 		writelog(logfile, message)
 		return {'status': False, 'message': e}
+
+def runproc(cfg, proc_name):
+	start = time.time()
+	#Get database connection
+	target_db = cfg['main']['db_name']
+	target_cnx = getdbconnection(cfg, target_db)
+	target_cursor = target_cnx.cursor()
+	try:
+		target_cursor.callproc(proc_name)
+		#Commit changes and close connection
+		target_cnx.commit()
+		target_cursor.close()
+		target_cnx.close()
+		print 'Success: Procedure',proc_name,'completed in',time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
+	except Exception, e:
+		logfile = cfg['main']['logs_dir']+'failed_'+proc_name+'.log'
+		message = "DATABASE: "+ target_db + " ERROR: "+ str(e)
+		writelog(logfile, message)
+		print 'Error: Procedure',proc_name,'has the following error',e
 
 def getsql(sqlfile):
 	file = open(sqlfile, 'r')
@@ -303,11 +337,10 @@ if __name__ == '__main__':
 	}
 
 	#Check backups
-	#getcheckbackups(ftpcfg, backup_dir, files_dir)
+	getcheckbackups(ftpcfg, backup_dir, files_dir)
 
 	#Get latest backups
-	#backups = getlatestbackups(ftpcfg, backup_dir, files_dir)
+	backups = getlatestbackups(ftpcfg, backup_dir, files_dir)
 
-	backups = {'14947' : '14947_20170925145229_v3.2.2.sql.zip'}
 	#Import backups
 	databases = extractbackup(backups)

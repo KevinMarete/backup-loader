@@ -24,3 +24,15 @@ CREATE TABLE IF NOT EXISTS `prep_reason` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+IF NOT EXISTS(SELECT NULL FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'patient' AND table_schema = '{db_name}' AND column_name = 'breastfeeding')  THEN
+  ALTER TABLE `patient` ADD `breastfeeding` tinyint(2) NOT NULL DEFAULT '0' AFTER `pregnant`;
+END IF;
+
+IF NOT EXISTS(SELECT NULL FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'patient' AND table_schema = '{db_name}' AND column_name = 'clinicalappointment')  THEN
+  ALTER TABLE `patient` ADD `clinicalappointment` varchar(20) NOT NULL AFTER `nextappointment`;
+END IF;
+
+IF NOT EXISTS(SELECT NULL FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'patient' AND table_schema = '{db_name}' AND column_name = 'differentiated_care')  THEN
+  ALTER TABLE `patient` ADD `differentiated_care` tinyint(1) NOT NULL AFTER `clinicalappointment`;
+END IF;

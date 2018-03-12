@@ -1,5 +1,6 @@
 SELECT
 	p.patient_number_ccc patient_number,
+	p.facility_code facility,
 	p.dob birth_date,
 	p.pob place_of_birth,
 	CASE 
@@ -39,7 +40,6 @@ SELECT
 	p.date_enrolled enrollment_date,
 	p.start_regimen_date,
 	p.status_change_date,
-	p.facility_code facility,
 	sr.regimen_code start_regimen,
 	cr.regimen_code current_regimen,
 	rst.name service,
