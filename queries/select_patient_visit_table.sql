@@ -6,8 +6,8 @@ SELECT
 	vp.name purpose,
 	rcp.name regimen_change_reason,
 	pv.dispensing_date,
-	lr.regimen_code last_regimen,
-	cr.regimen_code current_regimen,
+	CONCAT_WS(' | ', lr.regimen_code, lr.regimen_desc) last_regimen,
+	CONCAT_WS(' | ', cr.regimen_code, cr.regimen_desc) current_regimen,
 	CASE 
 		WHEN pv.dispensing_date = pa.appointment THEN pa.appointment
 		WHEN pv.dispensing_date > pa.appointment THEN MAX(pa.appointment)
@@ -32,7 +32,7 @@ SELECT
 		ELSE 100 
 	END AS self_reporting_adherence,
 	oi.name indication,
-	CONCAT_WS('_', pv.patient_id, pv.facility) patient_adt_id
+	CONCAT_WS('_', pv.patient_id, {}) patient_adt_id
 FROM patient_visit pv
 LEFT JOIN visit_purpose vp ON vp.id = pv.visit_purpose
 LEFT JOIN regimen lr ON lr.id = pv.last_regimen
@@ -42,5 +42,6 @@ LEFT JOIN non_adherence_reasons ndr ON ndr.id = pv.non_adherence_reason
 LEFT JOIN drugcode d ON d.id = pv.drug_id
 LEFT JOIN patient_appointment pa ON pa.patient = pv.patient_id AND pv.dispensing_date >= pa.appointment 
 LEFT JOIN opportunistic_infection oi ON oi.indication = pv.indication
+WHERE pv.active = '1'
 GROUP BY pv.id
 LIMIT {}, {}

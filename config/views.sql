@@ -1,5 +1,6 @@
 /*Install List*/
-CREATE OR REPLACE VIEW vw_install_list AS
+DROP VIEW IF EXISTS vw_install_list;
+CREATE VIEW vw_install_list AS
 	SELECT 
 		f.mflcode, 
 		f.name facility, 
@@ -24,7 +25,8 @@ CREATE OR REPLACE VIEW vw_install_list AS
 	GROUP BY i.facility_id;
 
 /*Central Site List*/
-CREATE OR REPLACE VIEW vw_central_site_list AS
+DROP VIEW IF EXISTS vw_central_site_list;
+CREATE VIEW vw_central_site_list AS
 	SELECT 
 	    f.name facility,
 	    c.name county,

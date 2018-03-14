@@ -1,8 +1,8 @@
 SELECT
 	p.patient_number_ccc patient_number,
-	p.facility_code facility,
+	{} facility,
 	p.dob birth_date,
-	p.pob place_of_birth,
+	LOWER(ds.name) place_of_birth,
 	CASE 
 		WHEN LOWER(g.name) = 'male' THEN 'male'
 		WHEN LOWER(g.name) = 'female' THEN 'female'
@@ -14,12 +14,11 @@ SELECT
 	p.start_height,
 	p.start_weight,
 	SQRT((p.start_height * p.start_weight)/3600) start_bsa, 
-	(p.start_height/(p.start_weight/100)) start_bmi,
+	(p.start_height/((p.start_weight/100)*(p.start_weight/100))) start_bmi,
 	p.height current_height,
 	p.weight current_weight,
 	SQRT((p.height * p.weight)/3600) current_bsa,
-
-	(p.weight/(p.height/100)) current_bmi,
+	(p.weight/((p.height/100)*(p.height/100))) current_bmi,
 	CASE 
 		WHEN p.partner_status = 0 THEN 'No Partner'
 		WHEN p.partner_status = 1 THEN 'Concordant'
@@ -40,8 +39,8 @@ SELECT
 	p.date_enrolled enrollment_date,
 	p.start_regimen_date,
 	p.status_change_date,
-	sr.regimen_code start_regimen,
-	cr.regimen_code current_regimen,
+	CONCAT_WS(' | ', sr.regimen_code, sr.regimen_desc) start_regimen,
+	CONCAT_WS(' | ', cr.regimen_code, cr.regimen_desc) current_regimen,
 	rst.name service,
 	ps.Name status,
 	pso.name source,
@@ -66,6 +65,7 @@ SELECT
 	pvl.result last_viral_test_result,
 	pvl.justification last_viral_test_justification
 FROM patient p
+LEFT JOIN district ds ON ds.id = p.pob
 LEFT JOIN gender g ON g.id = p.gender
 LEFT JOIN dependants d ON d.child = p.patient_number_ccc
 LEFT JOIN spouses s ON s.primary_spouse = p.patient_number_ccc

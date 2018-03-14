@@ -36,3 +36,7 @@ END IF;
 IF NOT EXISTS(SELECT NULL FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'patient' AND table_schema = '{db_name}' AND column_name = 'differentiated_care')  THEN
   ALTER TABLE `patient` ADD `differentiated_care` tinyint(1) NOT NULL AFTER `clinicalappointment`;
 END IF;
+
+IF NOT EXISTS(SELECT NULL FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'patient_prep_test' AND table_schema = '{db_name}' AND column_name = 'prep_reason_id')  THEN
+  ALTER TABLE `patient_prep_test` ADD `prep_reason_id` int(11) NULL AFTER `patient_id`;
+END IF;
