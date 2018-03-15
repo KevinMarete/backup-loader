@@ -14,7 +14,7 @@ SELECT
 	p.start_height,
 	p.start_weight,
 	SQRT((p.start_height * p.start_weight)/3600) start_bsa, 
-	(p.start_height/((p.start_weight/100)*(p.start_weight/100))) start_bmi,
+	(p.start_weight/((p.start_height/100)*(p.start_height/100))) start_bmi,
 	p.height current_height,
 	p.weight current_weight,
 	SQRT((p.height * p.weight)/3600) current_bsa,

@@ -2,9 +2,10 @@ import configparser
 import ftplib
 import sys
 import os
-import mysql.connector
+import pymysql.cursors
 import time
 import zipfile
+import warnings
 
 def getcheckbackups(ftpcfg, backup_dir, local_dir):
 	backup_count = 0
@@ -46,7 +47,7 @@ def getcheckbackups(ftpcfg, backup_dir, local_dir):
 		dir_backup_count = len(ftp.nlst())
 		backup_count += dir_backup_count
 		if(dir_backup_count == 0):
-			ftp.rmd(folder)
+			#ftp.rmd(folder)
 			empty_dir_count += 1
 
 	#Reset Switch directories
@@ -95,13 +96,15 @@ def getimportedfiles(cfg):
 
 def getdbconnection(cfg, db_name):
 	dbcfg = {
-		'user': cfg["database"]["username"],
-		'password': cfg["database"]["password"],
-		'host': cfg["database"]["hostname"],
-		'port': cfg["database"]["port"],
-		'database': db_name
+		'user': str(cfg["database"]["username"]),
+		'password': str(cfg["database"]["password"]),
+		'host': str(cfg["database"]["hostname"]),
+		'port': int(cfg["database"]["port"]),
+		'database': db_name,
+		'charset': 'utf8mb4',
+		'cursorclass': pymysql.cursors.Cursor
 	}
-	return mysql.connector.connect(**dbcfg)
+	return pymysql.connect(**dbcfg)
 
 def extractbackup(mflcode, backup):
 	start = time.time()
@@ -155,18 +158,22 @@ def importsql(cfg, db_name, sqlfile):
 
 def getconnection(cfg):
 	dbcfg = {
-		'user': cfg["database"]["username"],
-		'password': cfg["database"]["password"],
-		'host': cfg["database"]["hostname"],
-		'port': cfg["database"]["port"]
+		'user': str(cfg["database"]["username"]),
+		'password': str(cfg["database"]["password"]),
+		'host': str(cfg["database"]["hostname"]),
+		'port': int(cfg["database"]["port"]),
+		'charset': 'utf8mb4',
+		'cursorclass': pymysql.cursors.Cursor
 	}
-	return mysql.connector.connect(**dbcfg)
+	return pymysql.connect(**dbcfg)
 
 def dropdatabase(cfg, db_name):
 	cnx = getconnection(cfg)
-	cursor = cnx.cursor()
-	cursor.execute("DROP DATABASE IF EXISTS "+db_name)
-	cnx.commit()
+	with warnings.catch_warnings():
+		warnings.filterwarnings("ignore")
+		cursor = cnx.cursor()
+		cursor.execute("DROP DATABASE IF EXISTS "+db_name)
+		cnx.commit()
 
 def logbackup(cfg, filename, mflcode, adt_version):
 	try:
@@ -199,31 +206,49 @@ def extractdata(cfg, source_db, mflcode):
 
 	#Fix for source tables
 	fixfile = cfg['main']['queries_dir']+'create_alter_source_tables.sql'	
-	for result in source_cursor.execute(getsql(fixfile).format(db_name=source_db), multi=True):
-		if result.with_rows:
-			"Rows produced by statement '{}':".format(result.statement)
-		else:
-			"Number of rows affected by statement '{}': {}".format(result.statement, result.rowcount)
-	source_cnx.commit()
+	filestream = getsql(fixfile).format(db_name=source_db).strip().replace('\r\n','')
+	for stmt in filestream.split('//'):
+		if len(stmt) > 0:
+			try:
+				with warnings.catch_warnings():
+					warnings.filterwarnings("ignore")
+					source_cursor.execute(stmt)
+					source_cnx.commit()
+			except Exception, e:
+				print 'Error:', e, 'Query:', stmt
+	source_cursor.close()
+	source_cnx.close()
+	#Add missing columns
+	addcolumns(cfg, source_db)
 	print 'Success: Missing tables and columns added to database:',source_db
 
 	#Get queries from source_tables
+	source_cnx = getdbconnection(cfg, source_db)
 	for source_table in source_tables:
+		table_size = 0
 		inner_start = time.time()
 		sql_counter = 0
 		sqlfile = cfg['main']['queries_dir']+'select_'+source_table+'_table.sql'
 		destination_table = str(cfg['destination'][source_table])
 		#Get table_size
 		sql_count = "SELECT COUNT(*) total FROM " + source_table + " WHERE active = '1'"
+		source_cursor = source_cnx.cursor()
 		source_cursor.execute(sql_count)
-		table_size = source_cursor.fetchone()[0]
+		result = source_cursor.fetchone()
+		if result:
+			table_size = result[0]
+		source_cursor.close()
 		#Use batch to get data
 		print 'Info: Migration of table',source_table,'containing rows',table_size,'has started!'
 		while sql_counter < table_size:
 			try:
-				query = getsql(sqlfile).format(mflcode, sql_counter, batch_size)
-				source_cursor.execute(query)
-				source_data = source_cursor.fetchall()
+				with warnings.catch_warnings():
+					warnings.filterwarnings("ignore")
+					source_cursor = source_cnx.cursor()
+					query = getsql(sqlfile).format(mflcode, batch_size, sql_counter)
+					source_cursor.execute(query)
+					source_data = list(source_cursor)
+					source_cursor.close()
 				#Save source_data using bulk replace_into
 				savebatch(cfg, destination_table, source_data)
 				#Increment batch_size
@@ -243,17 +268,60 @@ def extractdata(cfg, source_db, mflcode):
 
 	return extract_status
 
+def addcolumns(cfg, source_db):
+	source_cnx = getdbconnection(cfg, source_db)
+	source_cursor = source_cnx.cursor()
+	columns = {
+		"breastfeeding": {
+			"table": "patient", 
+			"query": "ALTER TABLE `patient` ADD `breastfeeding` tinyint(2) NOT NULL DEFAULT '0' AFTER `pregnant`"
+		},
+		"clinicalappointment": {
+			"table": "patient", 
+			"query": "ALTER TABLE `patient` ADD `clinicalappointment` varchar(20) NOT NULL AFTER `nextappointment`"
+		},
+		"differentiated_care": {
+			"table": "patient", 
+			"query": "ALTER TABLE `patient` ADD `differentiated_care` tinyint(1) NOT NULL AFTER `clinicalappointment`"
+		},
+		"prep_reason_id": {
+			"table": "patient_prep_test", 
+			"query": "ALTER TABLE `patient_prep_test` ADD `prep_reason_id` int(11) NULL AFTER `patient_id`"
+		}
+	}
+
+	try:
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore")
+			for column in columns:
+				table = columns[column]['table']
+				query = columns[column]['query']
+				stmt = ("SELECT COUNT(*) total FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '{}' AND table_schema = '{}' AND column_name = '{}'").format(table, source_db, column)
+				source_cursor.execute(stmt)
+				row = source_cursor.fetchone()
+				if row is not None:
+					if row[0] < 1:
+						source_cursor.execute(query)
+			source_cnx.commit()
+			source_cursor.close()
+			source_cnx.close()
+	except Exception, e:
+		print 'Error:', e
+
+
 def savebatch(cfg, destination_table, source_data):
 	#Get database connection
 	target_db = cfg['main']['db_name']
 	target_cnx = getdbconnection(cfg, target_db)
 	target_cursor = target_cnx.cursor()
 	try:
-		target_cursor.executemany(getsql(cfg['main']['queries_dir']+'insert_'+destination_table+'_table.sql'), source_data)
-		#Commit changes and close connection
-		target_cnx.commit()
-		target_cursor.close()
-		target_cnx.close()
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore")
+			target_cursor.executemany(getsql(cfg['main']['queries_dir']+'insert_'+destination_table+'_table.sql'), source_data)
+			#Commit changes and close connection
+			target_cnx.commit()
+			target_cursor.close()
+			target_cnx.close()
 		return {'status': True, 'message': destination_table + ' batch saved!'}
 	except Exception, e:
 		logfile = cfg['main']['logs_dir']+'failed_'+destination_table+'.log'

@@ -2,7 +2,7 @@ SELECT
 	pv.current_height,
 	pv.current_weight,
 	SQRT((pv.current_height * pv.current_weight)/3600) current_bsa,
-	(pv.current_weight/(pv.current_height/100)) current_bmi,
+	(pv.current_weight/((pv.current_height/100)*(pv.current_height/100))) current_bmi,
 	vp.name purpose,
 	rcp.name regimen_change_reason,
 	pv.dispensing_date,
