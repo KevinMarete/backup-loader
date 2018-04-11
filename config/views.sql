@@ -21,7 +21,7 @@ CREATE VIEW vw_install_list AS
 	INNER JOIN tbl_county c ON c.id = sb.county_id
 	INNER JOIN tbl_partner p ON p.id = f.partner_id
 	INNER JOIN tbl_user u ON u.id = i.user_id
-	LEFT JOIN tbl_backup b ON b.facility_id = f.id
+	LEFT JOIN tbl_backup b ON b.facility_id = i.facility_id
 	GROUP BY i.facility_id;
 
 /*Central Site List*/
@@ -43,7 +43,7 @@ CREATE VIEW vw_central_site_list AS
 	INNER JOIN tbl_county c ON c.id = sb.county_id
 	INNER JOIN tbl_partner p ON p.id = f.partner_id
 	LEFT JOIN tbl_install i ON f.id = i.facility_id
-	LEFT JOIN tbl_backup b ON b.facility_id = f.id
+	LEFT JOIN tbl_backup b ON b.facility_id = i.facility_id
 	LEFT JOIN tbl_user u ON u.id = i.user_id
 	WHERE f.category LIKE '%central%'
 	GROUP BY f.id;
