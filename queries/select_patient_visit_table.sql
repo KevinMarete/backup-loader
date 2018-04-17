@@ -43,5 +43,5 @@ LEFT JOIN drugcode d ON d.id = pv.drug_id
 LEFT JOIN patient_appointment pa ON pa.patient = pv.patient_id AND pv.dispensing_date >= pa.appointment 
 LEFT JOIN opportunistic_infection oi ON oi.indication = pv.indication
 WHERE pv.active = '1'
-GROUP BY pv.id
+GROUP BY patient_adt_id, pv.dispensing_date, d.drug
 LIMIT {}, {}
