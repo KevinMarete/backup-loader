@@ -14,7 +14,7 @@ CREATE VIEW vw_install_list AS
 		i.active_patients,
 		i.contact_name contact_name,
 		REPLACE(i.contact_phone, '254','0') contact_phone,
-		u.name assigned_to
+		CONCAT_WS(' ', u.firstname, u.lastname) assigned_to
 	FROM tbl_install i
 	INNER JOIN tbl_facility f ON f.id = i.facility_id
 	INNER JOIN tbl_subcounty sb ON sb.id = f.subcounty_id
@@ -37,7 +37,7 @@ CREATE VIEW vw_central_site_list AS
 	    IF(i.is_internet = 1, 'Yes', 'No') has_internet,
 	    IF(b.id IS NOT NULL, 'Yes', 'No') has_backup,
 	    i.active_patients,
-	    u.name coordinator
+	    CONCAT_WS(' ', u.firstname, u.lastname) coordinator
 	FROM tbl_facility f 
 	INNER JOIN tbl_subcounty sb ON sb.id = f.subcounty_id
 	INNER JOIN tbl_county c ON c.id = sb.county_id
