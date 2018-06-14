@@ -47,3 +47,49 @@ CREATE VIEW vw_central_site_list AS
 	LEFT JOIN tbl_user u ON u.id = i.user_id
 	WHERE f.category LIKE '%central%'
 	GROUP BY f.id;
+
+/*CDRR Item List*/
+DROP VIEW IF EXISTS vw_cdrr_list;
+CREATE VIEW vw_cdrr_list AS
+	SELECT 
+	    f.name facility,
+	    co.name county,
+	    sb.name sub_county,
+	    p.name partner,
+	    YEAR(c.period_begin) data_year,
+	    DATE_FORMAT(c.period_begin, '%b') data_month,
+	    c.period_begin data_date,
+	    d.name drug,
+	    ci.dispensed_packs consumed,
+	    ci.qty_allocated allocated
+	FROM tbl_cdrr c
+	INNER JOIN tbl_cdrr_item ci ON ci.cdrr_id = c.id
+	INNER JOIN tbl_facility f ON f.id = c.facility_id
+	INNER JOIN tbl_subcounty sb ON sb.id = f.subcounty_id
+	INNER JOIN tbl_county co ON co.id = sb.county_id
+	INNER JOIN tbl_partner p ON p.id = f.partner_id
+	INNER JOIN vw_drug_list d On d.id = ci.drug_id
+	GROUP BY ci.id;
+
+/*MAPS Item List*/
+DROP VIEW IF EXISTS vw_maps_list;
+CREATE VIEW vw_maps_list AS
+	SELECT 
+	    f.name facility,
+	    co.name county,
+	    sb.name sub_county,
+	    p.name partner,
+	    YEAR(m.period_begin) data_year,
+	    DATE_FORMAT(m.period_begin, '%b') data_month,
+	    m.period_begin data_date,
+	    r.name regimen,
+	    r.service regimen_service,
+	    mi.total
+	FROM tbl_maps m
+	INNER JOIN tbl_maps_item mi ON mi.maps_id = m.id
+	INNER JOIN tbl_facility f ON f.id = m.facility_id
+	INNER JOIN tbl_subcounty sb ON sb.id = f.subcounty_id
+	INNER JOIN tbl_county co ON co.id = sb.county_id
+	INNER JOIN tbl_partner p ON p.id = f.partner_id
+	INNER JOIN vw_regimen_list r On r.id = mi.regimen_id
+	GROUP BY mi.id;
