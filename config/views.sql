@@ -54,7 +54,7 @@ CREATE VIEW vw_cdrr_list AS
 	SELECT 
 	    f.name facility,
 	    co.name county,
-	    sb.name sub_county,
+	    sb.name subcounty,
 	    p.name partner,
 	    YEAR(c.period_begin) data_year,
 	    DATE_FORMAT(c.period_begin, '%b') data_month,
@@ -77,13 +77,14 @@ CREATE VIEW vw_maps_list AS
 	SELECT 
 	    f.name facility,
 	    co.name county,
-	    sb.name sub_county,
+	    sb.name subcounty,
 	    p.name partner,
 	    YEAR(m.period_begin) data_year,
 	    DATE_FORMAT(m.period_begin, '%b') data_month,
 	    m.period_begin data_date,
 	    r.name regimen,
 	    r.service regimen_service,
+	    r.category regimen_category,
 	    mi.total
 	FROM tbl_maps m
 	INNER JOIN tbl_maps_item mi ON mi.maps_id = m.id
