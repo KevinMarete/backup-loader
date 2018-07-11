@@ -53,6 +53,12 @@ DROP VIEW IF EXISTS vw_cdrr_list;
 CREATE VIEW vw_cdrr_list AS
 	SELECT 
 	    f.name facility,
+	    f.category category,
+	    CASE 
+	    	WHEN f.category = 'central' AND c.code = 'D-CDRR' THEN 'D-CDRR'
+	    	WHEN f.category = 'standalone' AND c.code = 'F-CDRR' THEN 'F-CDRR_packs'
+	    	ELSE 'F-CDRR_units'
+	    END AS code,
 	    co.name county,
 	    sb.name subcounty,
 	    p.name partner,
@@ -63,6 +69,7 @@ CREATE VIEW vw_cdrr_list AS
 	    ci.dispensed_packs consumed,
 	    ci.qty_allocated allocated
 	FROM tbl_cdrr c
+	INNER JOIN tbl_maps m ON m.facility_id = c.facility_id AND m.period_begin = c.period_begin AND m.period_end = c.period_end AND SUBSTRING(m.code, 1, 1) = SUBSTRING(c.code, 1, 1)
 	INNER JOIN tbl_cdrr_item ci ON ci.cdrr_id = c.id
 	INNER JOIN tbl_facility f ON f.id = c.facility_id
 	INNER JOIN tbl_subcounty sb ON sb.id = f.subcounty_id
@@ -76,6 +83,8 @@ DROP VIEW IF EXISTS vw_maps_list;
 CREATE VIEW vw_maps_list AS
 	SELECT 
 	    f.name facility,
+	    f.category category,
+	    m.code code,
 	    co.name county,
 	    sb.name subcounty,
 	    p.name partner,
@@ -87,6 +96,7 @@ CREATE VIEW vw_maps_list AS
 	    r.category regimen_category,
 	    mi.total
 	FROM tbl_maps m
+	INNER JOIN tbl_cdrr c ON c.facility_id = m.facility_id AND c.period_begin = m.period_begin AND c.period_end = m.period_end AND SUBSTRING(c.code, 1, 1) = SUBSTRING(m.code, 1, 1)
 	INNER JOIN tbl_maps_item mi ON mi.maps_id = m.id
 	INNER JOIN tbl_facility f ON f.id = m.facility_id
 	INNER JOIN tbl_subcounty sb ON sb.id = f.subcounty_id
