@@ -71,7 +71,7 @@ LEFT JOIN dependants d ON d.child = p.patient_number_ccc
 LEFT JOIN spouses s ON s.primary_spouse = p.patient_number_ccc
 LEFT JOIN regimen sr ON sr.id = p.start_regimen
 LEFT JOIN regimen cr ON cr.id = p.current_regimen
-LEFT JOIN regimen_service_type rst ON sr.id = p.service
+LEFT JOIN regimen_service_type rst ON rst.id = p.service
 LEFT JOIN patient_status ps ON ps.id = p.current_status
 LEFT JOIN patient_source pso ON pso.id = p.source
 LEFT JOIN (
@@ -89,4 +89,4 @@ LEFT JOIN (
 ) pvl ON pvl.patient_ccc_number = p.patient_number_ccc
 WHERE p.active = '1'
 GROUP BY p.id
-LIMIT {}, {}
+LIMIT {} OFFSET {}
