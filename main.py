@@ -15,47 +15,50 @@ def getcheckbackups(ftpcfg, backup_dir, local_dir):
     good_count = 0
     corrupted_count = 0
     empty_dir_count = 0
-    # Connect to ftp
-    ftp = ftplib.FTP(ftpcfg['hostname'],
-                     ftpcfg['username'], ftpcfg['password'])
-    # Switch directories
-    ftp.cwd(backup_dir)
-    # List folders
-    folders = ftp.nlst()
-    # List folder contents
-    for folder in folders:
-        ftp.cwd(backup_dir+folder)
-        backups = ftp.nlst()
-        for backup in backups:
-            # Download ftp file
-            try:
-                localfile = os.path.join(local_dir, backup)
-                with open(localfile, 'wb') as local_file:
-                    ftp.retrbinary('RETR ' + backup, local_file.write)
-            except ftplib.error_perm:
-                pass
+    try:
+        # Connect to ftp
+        ftp = ftplib.FTP(ftpcfg['hostname'],
+                         ftpcfg['username'], ftpcfg['password'], timeout=100)
+        # Switch directories
+        ftp.cwd(backup_dir)
+        # List folders
+        folders = ftp.nlst()
+        # List folder contents
+        for folder in folders:
+            ftp.cwd(backup_dir+folder)
+            backups = ftp.nlst()
+            for backup in backups:
+                # Download ftp file
+                try:
+                    localfile = os.path.join(local_dir, backup)
+                    with open(localfile, 'wb') as local_file:
+                        ftp.retrbinary('RETR ' + backup, local_file.write)
+                except ftplib.error_perm:
+                    pass
 
-            # Check file status
-            try:
-                zipfile.ZipFile(localfile)
-                good_count += 1
-            except zipfile.BadZipfile:
-                # Remove from ftp
-                ftp.delete(backup)
-                corrupted_count += 1
+                # Check file status
+                try:
+                    zipfile.ZipFile(localfile)
+                    good_count += 1
+                except zipfile.BadZipfile:
+                    # Remove from ftp
+                    ftp.delete(backup)
+                    corrupted_count += 1
 
-            # Remove localfile
-            os.remove(localfile)
+                # Remove localfile
+                os.remove(localfile)
 
-        # Remove folder if empty
-        dir_backup_count = len(ftp.nlst())
-        backup_count += dir_backup_count
-        if(dir_backup_count == 0):
-            ftp.rmd(folder)
-            empty_dir_count += 1
+            # Remove folder if empty
+            dir_backup_count = len(ftp.nlst())
+            backup_count += dir_backup_count
+            if(dir_backup_count == 0):
+                ftp.rmd(folder)
+                empty_dir_count += 1
 
-    # Reset Switch directories
-    ftp.cwd(backup_dir)
+        # Reset Switch directories
+        ftp.cwd(backup_dir)
+    except BlockingIOError as e:
+        pass
 
     print('Facilties:', len(ftp.nlst()), 'Backups:', backup_count, 'Good:',
           good_count, 'Corrupted:', corrupted_count, 'Empty Directories:', empty_dir_count)
@@ -65,33 +68,37 @@ def getlatestbackups(ftpcfg, backup_dir, local_dir):
     latest_backups = {}
     # Get already imported files
     imported_files = [item[0] for item in getimportedfiles(cfg)]
-    # Connect to ftp
-    ftp = ftplib.FTP(ftpcfg['hostname'],
-                     ftpcfg['username'], ftpcfg['password'])
-    # Switch directories
-    ftp.cwd(backup_dir)
-    # List folders
-    folders = ftp.nlst()
-    # List folder contents
-    for folder in folders:
-        ftp.cwd(backup_dir+folder)
-        backups = ftp.nlst()
-        # Get latest backup
-        if len(backups) > 0:
-            filename = backups[-1]
-            # Check if file has already been processed
-            if filename not in imported_files:
-                host_file = os.path.join(local_dir, filename)
-                latest_backups[folder] = filename
-                try:
-                    with open(host_file, 'wb') as local_file:
-                        ftp.retrbinary('RETR ' + filename, local_file.write)
-                except ftplib.error_perm:
-                    pass
-    # Exit ftp
-    ftp.quit()
-    # Show number of latest backups
-    print('Latest Backups:', len(latest_backups), 'file(s)')
+    try:
+        # Connect to ftp
+        ftp = ftplib.FTP(ftpcfg['hostname'],
+                         ftpcfg['username'], ftpcfg['password'], timeout=10)
+        # Switch directories
+        ftp.cwd(backup_dir)
+        # List folders
+        folders = ftp.nlst()
+        # List folder contents
+        for folder in folders:
+            ftp.cwd(backup_dir+folder)
+            backups = ftp.nlst()
+            # Get latest backup
+            if len(backups) > 0:
+                filename = backups[-1]
+                # Check if file has already been processed
+                if filename not in imported_files:
+                    host_file = os.path.join(local_dir, filename)
+                    latest_backups[folder] = filename
+                    try:
+                        with open(host_file, 'wb') as local_file:
+                            ftp.retrbinary('RETR ' + filename,
+                                           local_file.write)
+                    except ftplib.error_perm:
+                        pass
+        # Exit ftp
+        ftp.quit()
+        # Show number of latest backups
+        print('Latest Backups:', len(latest_backups), 'file(s)')
+    except BlockingIOError as e:
+        pass
 
     return latest_backups
 
@@ -440,7 +447,7 @@ if __name__ == '__main__':
     }
 
     # Check backups
-    getcheckbackups(ftpcfg, backup_dir, files_dir)
+    #getcheckbackups(ftpcfg, backup_dir, files_dir)
 
     # Get latest backups
     backups = getlatestbackups(ftpcfg, backup_dir, files_dir)
